@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Espelho de classe</title>
+<style>
+:root{--navy:#243b5a;--blue:#4777a8;--line:#cbd7e4;--ink:#1d2938;--muted:#718096}
+*{box-sizing:border-box}body{margin:0;background:#f4f6f9;color:var(--ink);font:15px system-ui,Arial,sans-serif}
+header{background:var(--navy);color:white;padding:18px 22px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}h1{font-size:21px;margin:0}header p{margin:3px 0 0;color:#d8e4f0;font-size:13px}
+button,.filelabel{border:1px solid var(--line);background:white;color:var(--ink);border-radius:9px;padding:9px 12px;font:inherit;font-weight:600;cursor:pointer}.primary{background:var(--blue);color:white;border-color:var(--blue)}button:disabled{cursor:default}
+.actions{display:flex;gap:8px;flex-wrap:wrap}main{max-width:1400px;margin:20px auto;padding:0 16px;display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:18px;align-items:start}.panel{background:white;border:1px solid #e0e6ed;border-radius:15px;padding:18px;box-shadow:0 3px 14px #1c35500b}
+h2{font-size:18px;margin:0}.hint,.count{font-size:13px;color:var(--muted);margin:5px 0 14px}
+.front{display:flex;justify-content:center;gap:14px;max-width:650px;margin:15px auto 20px}.board{flex:1;text-align:center;padding:12px;background:#e5edf5;border:2px solid #9db3c9;border-radius:8px;color:var(--navy);font-weight:800}.teacher{min-width:145px;text-align:center;padding:9px;background:#f4ead6;border:1px solid #ddc79e;border-radius:8px;color:#72572c;font-weight:800}.teacher small{display:block;font-weight:500;font-size:11px}
+.grid{display:grid;grid-template-columns:38px repeat(5,minmax(95px,1fr));gap:7px;min-width:560px}.wrap{overflow-x:auto}.head,.rowhead{display:grid;place-items:center;color:var(--muted);font-size:12px;font-weight:800}.seat{min-height:72px;border:1.5px solid var(--line);border-radius:10px;background:#fbfcfe;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;position:relative;text-align:center;padding:6px}.seat:hover,.target{border-color:var(--blue);background:#eef5fc}.seat.filled{background:#f1f6fb;border-color:#9eb4ca}.name{font-weight:750;font-size:13px;overflow-wrap:anywhere}.coord{font-size:10px;color:var(--muted)}.empty .name{color:#9aa5b1;font-weight:500}
+.sidebar{position:sticky;top:12px}.search{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;font:inherit;margin-bottom:10px}.roster{display:flex;flex-direction:column;gap:5px;max-height:65vh;overflow:auto}.student{display:flex;width:100%;justify-content:space-between;text-align:left;background:white;border-color:transparent}.student.active{background:#eaf3fc;border-color:var(--blue);color:#1c4d7d}.student.assigned{background:#f1f3f5;color:#9aa3ad;text-decoration:line-through}.student .status{font-size:11px;color:var(--muted);font-weight:500}
+.statusbar{margin-top:14px;padding:10px 12px;background:#f6f8fb;border-radius:9px;color:#526174;font-size:13px;min-height:40px}.bottom{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}footer{text-align:center;color:var(--muted);font-size:12px;padding:0 16px 22px}#file{display:none}
+@media(max-width:850px){main{grid-template-columns:1fr}.sidebar{position:static;grid-row:1}.roster{max-height:240px}.panel{padding:14px}}
+@media print{header .actions,.sidebar,.bottom,footer,.hint{display:none!important}main{display:block;margin:0}.panel{border:0;box-shadow:none}.seat{min-height:65px}}
+</style></head><body>
+<header><div><h1>Espelho de classe</h1><p>Selecione um aluno na chamada e depois escolha uma carteira.</p></div><div class="actions"><button class="primary" id="export">Exportar espelho</button><label class="filelabel" for="file">Importar espelho</label><input id="file" type="file" accept=".json,application/json"><button id="print">Imprimir</button></div></header>
+<main><section class="panel"><h2>Mapa da sala</h2><p class="hint">Clique em um aluno à direita e, em seguida, em uma carteira vazia. Clique em uma carteira ocupada para retirar o aluno.</p>
+<div class="front"><div class="board">QUADRO</div><div class="teacher">PROFESSOR<small>à frente das colunas 1 e 2</small></div></div>
+<div class="wrap"><div class="grid" id="grid"></div></div><div class="statusbar" id="status">Escolha um aluno na chamada para começar.</div><div class="bottom"><button id="undo">Desfazer</button><button id="clear">Limpar posições</button><button id="reset">Restaurar chamada inicial</button></div></section>
+<aside class="panel sidebar"><h2>Chamada</h2><div class="count" id="count"></div><input class="search" id="search" placeholder="Buscar aluno..." type="search"><div class="roster" id="roster"></div></aside></main>
+<footer>As alterações são salvas automaticamente neste navegador. Exporte em JSON para levar o espelho a outro dispositivo.</footer>
+<script>
+const initial=["Alice","Ana Clara","Ana Lúcia","Camilly","Cecília","Clayton","Davi","Derick","Eduardo","Fernando","Gabriel","Isaque","Jana","Kauê","Laura","Liedson","Lohan","Luís","Manu","Maria Vitória","Mariana","Matheus","Michel","Miguel","Taemi","Yudi","Ágata"];
+let students=[...initial], seats=Array(30).fill(null), selected=null, history=[];
+const $=id=>document.getElementById(id), key="espelhoClasse_v1";
+function save(){localStorage.setItem(key,JSON.stringify({students,seats}))}
+function snap(){history.push(JSON.stringify({students,seats}));if(history.length>40)history.shift()}
+function render(){
+ const g=$("grid");g.innerHTML='<div></div>'+[1,2,3,4,5].map(n=>`<div class="head">${n}</div>`).join("");
+ for(let r=0;r<6;r++){let rh=document.createElement("div");rh.className="rowhead";rh.textContent=r+1;g.append(rh);
+  for(let c=0;c<5;c++){let i=r*5+c,n=seats[i],b=document.createElement("button");b.className="seat "+(n?"filled":"empty")+(selected&&!n?" target":"");b.innerHTML='<span class="name"></span><span class="coord"></span>';b.querySelector(".name").textContent=n||"Vazia";b.querySelector(".coord").textContent=`(${c+1}, ${r+1})`;b.title=n?`Retirar ${n}`:"Colocar aluno";
+   b.onclick=()=>{if(n){snap();seats[i]=null;selected=n;save();render();$("status").textContent=n+" retirado da carteira; selecione-o na chamada ou escolha outra posição."}else if(selected){snap();seats[i]=selected;selected=null;save();render();$("status").textContent="Aluno colocado em ("+(c+1)+", "+(r+1)+")."}else $("status").textContent="Primeiro selecione um aluno na chamada."};g.append(b)}
+ }
+ renderRoster()
+}
+function renderRoster(){let used=new Set(seats.filter(Boolean)),q=$("search").value.toLocaleLowerCase("pt-BR"),list=$("roster");list.innerHTML="";
+ students.forEach(n=>{let b=document.createElement("button");b.className="student"+(used.has(n)?" assigned":"")+(selected===n?" active":"");b.disabled=used.has(n);b.style.display=n.toLocaleLowerCase("pt-BR").includes(q)?"flex":"none";b.innerHTML="<span></span><span class=status></span>";b.children[0].textContent=n;b.children[1].textContent=used.has(n)?"Na carteira":selected===n?"Selecionado":"Disponível";b.onclick=()=>{selected=selected===n?null:n;render();$("status").textContent=selected?n+" selecionado. Agora clique em uma carteira vazia.":"Seleção cancelada."};list.append(b)});
+ $("count").textContent=`${used.size} de ${students.length} alunos colocados · ${students.length-used.size} disponíveis`
+}
+$("search").oninput=renderRoster;
+$("clear").onclick=()=>{if(!seats.some(Boolean))return;snap();seats.fill(null);selected=null;save();render();$("status").textContent="Todas as carteiras foram esvaziadas."};
+$("reset").onclick=()=>{if(!confirm("Restaurar a chamada inicial e apagar as posições?"))return;snap();students=[...initial];seats=Array(30).fill(null);selected=null;save();render()};
+$("undo").onclick=()=>{if(!history.length){$("status").textContent="Não há alterações para desfazer.";return}let x=JSON.parse(history.pop());students=x.students;seats=x.seats;selected=null;save();render();$("status").textContent="Última alteração desfeita."};
+$("print").onclick=()=>window.print();
+
+/* Exportação: abre a janela nativa para escolher pasta e nome do arquivo.
+   Se o navegador não oferecer essa API, solicita o nome e faz o download. */
+$("export").onclick=async()=>{
+  const data={format:"espelho-de-classe",version:1,students,seats};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const defaultName="espelho-de-classe.json";
+
+  if(window.showSaveFilePicker){
+    try{
+      const handle=await window.showSaveFilePicker({
+        suggestedName:defaultName,
+        types:[{description:"Arquivo JSON",accept:{"application/json":[".json"]}}]
+      });
+      const writable=await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      $("status").textContent="Espelho exportado com sucesso.";
+      return;
+    }catch(err){
+      if(err.name==="AbortError") return;
+      console.warn("Não foi possível abrir a janela de salvar; usando alternativa.",err);
+    }
+  }
+
+  let chosen=prompt("Escolha o nome do arquivo para exportar:",defaultName);
+  if(chosen===null)return;
+  chosen=chosen.trim()||defaultName;
+  if(!chosen.toLowerCase().endsWith(".json"))chosen+=".json";
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=chosen;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  $("status").textContent="Exportação iniciada: "+chosen;
+};
+
+$("file").onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let d=JSON.parse(await f.text());if(!Array.isArray(d.students)||!Array.isArray(d.seats)||d.seats.length!==30)throw Error("Estrutura do arquivo inválida.");let placed=d.seats.filter(Boolean);if(new Set(placed).size!==placed.length||placed.some(n=>!d.students.includes(n)))throw Error("Há nomes duplicados ou que não estão na chamada.");snap();students=d.students;seats=d.seats;selected=null;save();render();$("status").textContent="Espelho importado com sucesso."}catch(err){alert("Não foi possível importar: "+err.message)}e.target.value=""};
+try{let d=JSON.parse(localStorage.getItem(key)||"null");if(d&&Array.isArray(d.students)&&Array.isArray(d.seats)&&d.seats.length===30){students=d.students;seats=d.seats}}catch(e){}
+render();
+</script></body></html>
